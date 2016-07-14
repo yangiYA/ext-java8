@@ -59,8 +59,36 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	 * @param <RIGHT>
 	 */
 	public static class Left<LEFT, RIGHT> extends Either<LEFT, RIGHT> {
+
+		final private LEFT left;
+
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + ((left == null) ? 0 : left.hashCode());
+			return result;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			Left other = (Left) obj;
+			if (left == null) {
+				if (other.left != null)
+					return false;
+			} else if (!left.equals(other.left))
+				return false;
+			return true;
+		}
+
 		private Left(LEFT value) {
-			super(Optional.of(value), Optional.empty());
+			left = value;
 		}
 
 		/**
@@ -82,6 +110,15 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 			return true;
 		}
 
+		@Override
+		Optional<LEFT> left() {
+			return Optional.of(left);
+		}
+
+		@Override
+		Optional<Supplier<RIGHT>> rightSupplier() {
+			return Optional.empty();
+		}
 	}
 
 	/**
@@ -93,8 +130,10 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	 * @param <RIGHT>
 	 */
 	public static class Right<LEFT, RIGHT> extends Either<LEFT, RIGHT> {
-		private Right(RIGHT value) {
-			super(Optional.empty(), Optional.of(value));
+		final Supplier<RIGHT> rightSupplier;
+
+		private Right(Supplier<RIGHT> rightSupplier) {
+			this.rightSupplier = rightSupplier;
 		}
 
 		/**
@@ -107,7 +146,7 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 			if (value == null) {
 				throw new NullPointerException("parameter value is null !! ");
 			}
-			return new Right<>(value);
+			return new Right<>(() -> value);
 		}
 
 		/** {@inheritDoc} */
@@ -116,46 +155,29 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 			return false;
 		}
 
+		@Override
+		Optional<LEFT> left() {
+			return Optional.empty();
+		}
+
+		@Override
+		Optional<Supplier<RIGHT>> rightSupplier() {
+			return Optional.of(rightSupplier);
+		}
+
 	}
 
-	/** {@inheritDoc} */
-	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + ((left == null) ? 0 : left.hashCode());
-		result = prime * result + ((right == null) ? 0 : right.hashCode());
-		return result;
+	abstract Optional<LEFT> left();
+
+	final private Optional<RIGHT> right() {
+		if (rightSupplier().isPresent()) {
+			return Optional.of(rightSupplier().get().get());
+		} else {
+			return Optional.empty();
+		}
 	}
 
-	/**
-	 * @return true If the both values are same . false otherwise.
-	 */
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		@SuppressWarnings("rawtypes")
-		Either other = (Either) obj;
-		if (left == null) {
-			if (other.left != null)
-				return false;
-		} else if (!left.equals(other.left))
-			return false;
-		if (right == null) {
-			if (other.right != null)
-				return false;
-		} else if (!right.equals(other.right))
-			return false;
-		return true;
-	}
-
-	private final Optional<LEFT> left;
-	private final Optional<RIGHT> right;
+	abstract Optional<Supplier<RIGHT>> rightSupplier();
 
 	/**
 	 * Gets the left value if this is a Left.
@@ -163,7 +185,7 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	 * @return left value.
 	 */
 	public Optional<LEFT> getLeft() {
-		return left;
+		return left();
 	}
 
 	/**
@@ -172,7 +194,7 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	 * @return right value
 	 */
 	public Optional<RIGHT> getRight() {
-		return right;
+		return right();
 	}
 
 	/**
@@ -187,14 +209,12 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 		return !isLeft();
 	}
 
-	private Either(Optional<LEFT> left, Optional<RIGHT> right) {
-		this.left = left;
-		this.right = right;
+	private Either() {
 	}
 
 	private Stream<RIGHT> stream() {
-		if (right.isPresent()) {
-			return Stream.of(right.get());
+		if (right().isPresent()) {
+			return Stream.of(right().get());
 		}
 		return Stream.empty();
 	}
@@ -244,6 +264,9 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	/** {@inheritDoc} **/
 	@Override
 	public Stream<RIGHT> filter(Predicate<? super RIGHT> predicate) {
+		if (isLeft()) {
+			return this;
+		}
 		return stream().filter(predicate);
 	}
 
@@ -263,6 +286,25 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	@Override
 	public <R> Stream<R> flatMap(Function<? super RIGHT, ? extends Stream<? extends R>> mapper) {
 		return stream().flatMap(mapper);
+	}
+
+	public <R> Either<LEFT, R> flatMapEither(Function<? super RIGHT, ? extends Either<LEFT, ? extends R>> mapper) {
+		if (isLeft()) {
+			@SuppressWarnings("unchecked")
+			final Left<LEFT, R> lf = (Left<LEFT, R>) this;
+			return lf;
+		} else {
+
+			final Either<LEFT, ? extends R> rg = mapper.apply(this.getRight().get());
+			if (rg.isLeft()) {
+				return (Left<LEFT, R>) rg;
+			} else {
+				final Supplier<? extends R> sp2 = rg.rightSupplier().get();
+				final Supplier<R> spRtn = () -> sp2.get();
+
+				return new Right<LEFT, R>(spRtn);
+			}
+		}
 	}
 
 	/** {@inheritDoc} **/
@@ -310,13 +352,27 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	/** {@inheritDoc} **/
 	@Override
 	public Stream<RIGHT> limit(long maxSize) {
+		if (isLeft()) {
+			return this;
+		}
 		return stream().limit(maxSize);
+	}
+
+	private <R> Either<LEFT, R> leftOr(Function<? super RIGHT, ? extends R> mapper) {
+		if (isLeft()) {
+			@SuppressWarnings("unchecked")
+			final Left<LEFT, R> lf = (Left<LEFT, R>) this;
+			return lf;
+		} else {
+			final Right<LEFT, R> rg = Right.of(mapper.apply(this.getRight().get()));
+			return rg;
+		}
 	}
 
 	/** {@inheritDoc} **/
 	@Override
-	public <R> Stream<R> map(Function<? super RIGHT, ? extends R> mapper) {
-		return stream().map(mapper);
+	public <R> Either<LEFT, R> map(Function<? super RIGHT, ? extends R> mapper) {
+		return leftOr(mapper);
 	}
 
 	/** {@inheritDoc} **/
@@ -394,24 +450,36 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	/** {@inheritDoc} **/
 	@Override
 	public Stream<RIGHT> sequential() {
+		if (isLeft()) {
+			return this;
+		}
 		return stream().sequential();
 	}
 
 	/** {@inheritDoc} **/
 	@Override
 	public Stream<RIGHT> skip(long n) {
+		if (isLeft()) {
+			return this;
+		}
 		return stream().skip(n);
 	}
 
 	/** {@inheritDoc} **/
 	@Override
 	public Stream<RIGHT> sorted() {
+		if (isLeft()) {
+			return this;
+		}
 		return stream().sorted();
 	}
 
 	/** {@inheritDoc} **/
 	@Override
 	public Stream<RIGHT> sorted(Comparator<? super RIGHT> comparator) {
+		if (isLeft()) {
+			return this;
+		}
 		return stream().sorted(comparator);
 	}
 
@@ -436,6 +504,9 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	/** {@inheritDoc} **/
 	@Override
 	public Stream<RIGHT> unordered() {
+		if (isLeft()) {
+			return this;
+		}
 		return stream().unordered();
 	}
 
