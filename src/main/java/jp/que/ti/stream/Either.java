@@ -2,6 +2,8 @@ package jp.que.ti.stream;
 
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Spliterator;
 import java.util.function.BiConsumer;
@@ -31,6 +33,203 @@ import java.util.stream.Stream;
 public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 
 	/**
+	 * The Left version of an Either.
+	 *
+	 * @author yanagawa.h
+	 *
+	 * @param <LEFT>
+	 * @param <RIGHT>
+	 */
+	public static class Left<LEFT, RIGHT> extends Either<LEFT, RIGHT> {
+
+		/**
+		 * Constructs a {@link Left}
+		 *
+		 * @param value
+		 * @return {@link Left}
+		 */
+		public static <LEFT, RIGHT> Left<LEFT, RIGHT> of(LEFT value) {
+			if (value == null) {
+				throw new NullPointerException("parameter value is null !! ");
+			}
+			return new Left<>(value);
+		}
+
+		final private LEFT left;
+
+		private Left(LEFT value) {
+			left = Objects.requireNonNull(value);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+
+			return left.equals(((Left<?, ?>) obj).left);
+		}
+
+		@Override
+		public LEFT getLeftOr(LEFT defaultLeft) {
+			return left;
+		}
+
+		/**
+		 * Gets the left value.
+		 *
+		 * @return left value.
+		 */
+		@Override
+		public LEFT getLeftOrNoSuchElementException() {
+			return left;
+		}
+
+		@Override
+		public RIGHT getOr(RIGHT defaultRight) {
+			return defaultRight;
+		}
+
+		/**
+		 * This method throws {@link NoSuchElementException} always.
+		 *
+		 * @return right value
+		 */
+		public RIGHT getOrNoSuchElementException() {
+			throw new NoSuchElementException("No right object.");
+		}
+
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + ((left == null) ? 0 : left.hashCode());
+			return result;
+		}
+
+		/** {@inheritDoc} */
+		@Override
+		public boolean isLeft() {
+			return true;
+		}
+
+		/** {@inheritDoc} */
+		@Override
+		public String toString() {
+			return "Left[" + left + "]";
+		}
+	}
+
+	/**
+	 * The Right version of an Either.
+	 *
+	 * @author yanagawa.h
+	 *
+	 * @param <LEFT>
+	 * @param <RIGHT>
+	 */
+	public static class Right<LEFT, RIGHT> extends Either<LEFT, RIGHT> {
+		/**
+		 * Constructs a {@link Right}
+		 *
+		 * @param value
+		 * @return {@link Right}
+		 */
+		public static <LEFT, RIGHT> Right<LEFT, RIGHT> of(RIGHT value) {
+			if (value == null) {
+				throw new NullPointerException("parameter value is null !! ");
+			}
+			return new Right<>(() -> value);
+		}
+
+		final Supplier<RIGHT> rightSupplier;
+
+		private RIGHT rightcache = null;
+
+		/** コンストラクタ */
+		private Right(Supplier<RIGHT> rightSupplier) {
+			this.rightSupplier = Objects.requireNonNull(rightSupplier);
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other)
+				return true;
+			if (other == null)
+				return false;
+			if (getClass() != other.getClass())
+				return false;
+
+			final RIGHT rThis = getRightSupplier().get();
+
+			@SuppressWarnings("unchecked")
+			final RIGHT rOther = ((Right<?, RIGHT>) other).getRightSupplier().get();
+			return rThis.equals(rOther);
+		}
+
+		@Override
+		public LEFT getLeftOr(LEFT defaultLeft) {
+			return defaultLeft;
+		}
+
+		/**
+		 * This method throws {@link NoSuchElementException} always.
+		 *
+		 * @return left value.
+		 */
+		public LEFT getLeftOrNoSuchElementException() {
+			throw new NoSuchElementException("No left object.");
+		}
+
+		@Override
+		public RIGHT getOr(RIGHT defaultRight) {
+			return getRightSupplier().get();
+		}
+
+		/**
+		 * Gets the right value if this is a Right.
+		 *
+		 * @return right value
+		 */
+		public RIGHT getOrNoSuchElementException() {
+			return getRightSupplier().get();
+		}
+
+		/** rightSupplier のキャッシュ(rightSupplierの計算結果を格納しておく) */
+		private Supplier<RIGHT> getRightSupplier() {
+			if (rightcache == null) {
+				rightcache = rightSupplier.get();
+			}
+			return () -> rightcache;
+		}
+
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			final RIGHT r = getRightSupplier().get();
+			result = prime * result + ((r == null) ? 0 : r.hashCode());
+			return result;
+		}
+
+		/** {@inheritDoc} */
+		@Override
+		public boolean isLeft() {
+			return false;
+		}
+
+		/** {@inheritDoc} */
+		@Override
+		public String toString() {
+			final RIGHT right = getRightSupplier().get();
+			return "Right[" + right + "]";
+		}
+	}
+
+	/**
 	 * Constructs a {@link Left}
 	 *
 	 * @param value
@@ -50,173 +249,7 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 		return Right.of(value);
 	}
 
-	/**
-	 * The Left version of an Either.
-	 *
-	 * @author yanagawa.h
-	 *
-	 * @param <LEFT>
-	 * @param <RIGHT>
-	 */
-	public static class Left<LEFT, RIGHT> extends Either<LEFT, RIGHT> {
-
-		final private LEFT left;
-
-		@Override
-		public int hashCode() {
-			final int prime = 31;
-			int result = 1;
-			result = prime * result + ((left == null) ? 0 : left.hashCode());
-			return result;
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			if (this == obj)
-				return true;
-			if (obj == null)
-				return false;
-			if (getClass() != obj.getClass())
-				return false;
-			Left other = (Left) obj;
-			if (left == null) {
-				if (other.left != null)
-					return false;
-			} else if (!left.equals(other.left))
-				return false;
-			return true;
-		}
-
-		private Left(LEFT value) {
-			left = value;
-		}
-
-		/**
-		 * Constructs a {@link Left}
-		 *
-		 * @param value
-		 * @return {@link Left}
-		 */
-		public static <LEFT, RIGHT> Left<LEFT, RIGHT> of(LEFT value) {
-			if (value == null) {
-				throw new NullPointerException("parameter value is null !! ");
-			}
-			return new Left<>(value);
-		}
-
-		/** {@inheritDoc} */
-		@Override
-		public boolean isLeft() {
-			return true;
-		}
-
-		@Override
-		Optional<LEFT> left() {
-			return Optional.of(left);
-		}
-
-		@Override
-		Optional<Supplier<RIGHT>> rightSupplier() {
-			return Optional.empty();
-		}
-	}
-
-	/**
-	 * The Right version of an Either.
-	 *
-	 * @author yanagawa.h
-	 *
-	 * @param <LEFT>
-	 * @param <RIGHT>
-	 */
-	public static class Right<LEFT, RIGHT> extends Either<LEFT, RIGHT> {
-		final Supplier<RIGHT> rightSupplier;
-
-		private Right(Supplier<RIGHT> rightSupplier) {
-			this.rightSupplier = rightSupplier;
-		}
-
-		/**
-		 * Constructs a {@link Right}
-		 *
-		 * @param value
-		 * @return {@link Right}
-		 */
-		public static <LEFT, RIGHT> Right<LEFT, RIGHT> of(RIGHT value) {
-			if (value == null) {
-				throw new NullPointerException("parameter value is null !! ");
-			}
-			return new Right<>(() -> value);
-		}
-
-		/** {@inheritDoc} */
-		@Override
-		public boolean isLeft() {
-			return false;
-		}
-
-		@Override
-		Optional<LEFT> left() {
-			return Optional.empty();
-		}
-
-		@Override
-		Optional<Supplier<RIGHT>> rightSupplier() {
-			return Optional.of(rightSupplier);
-		}
-
-	}
-
-	abstract Optional<LEFT> left();
-
-	final private Optional<RIGHT> right() {
-		if (rightSupplier().isPresent()) {
-			return Optional.of(rightSupplier().get().get());
-		} else {
-			return Optional.empty();
-		}
-	}
-
-	abstract Optional<Supplier<RIGHT>> rightSupplier();
-
-	/**
-	 * Gets the left value if this is a Left.
-	 *
-	 * @return left value.
-	 */
-	public Optional<LEFT> getLeft() {
-		return left();
-	}
-
-	/**
-	 * Gets the right value if this is a Right.
-	 *
-	 * @return right value
-	 */
-	public Optional<RIGHT> getRight() {
-		return right();
-	}
-
-	/**
-	 * @return true if this is a Left, false otherwise.
-	 */
-	public abstract boolean isLeft();
-
-	/**
-	 * @return true if this is a Right, false otherwise.
-	 */
-	public boolean isRight() {
-		return !isLeft();
-	}
-
 	private Either() {
-	}
-
-	private Stream<RIGHT> stream() {
-		if (right().isPresent()) {
-			return Stream.of(right().get());
-		}
-		return Stream.empty();
 	}
 
 	/** {@inheritDoc} **/
@@ -231,10 +264,11 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 		return stream().anyMatch(predicate);
 	}
 
-	/** {@inheritDoc} **/
+	/**
+	 * This method do Nothing.
+	 **/
 	@Override
 	public void close() {
-		stream().close();
 	}
 
 	/** {@inheritDoc} **/
@@ -273,13 +307,13 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	/** {@inheritDoc} **/
 	@Override
 	public Optional<RIGHT> findAny() {
-		return stream().findAny();
+		return Optional.ofNullable(getOr(null));
 	}
 
 	/** {@inheritDoc} **/
 	@Override
 	public Optional<RIGHT> findFirst() {
-		return stream().findFirst();
+		return findAny();
 	}
 
 	/** {@inheritDoc} **/
@@ -295,13 +329,15 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 			return lf;
 		} else {
 
-			final Either<LEFT, ? extends R> rg = mapper.apply(this.getRight().get());
+			final Either<LEFT, ? extends R> rg = mapper.apply(this.getOrNoSuchElementException());
 			if (rg.isLeft()) {
-				return (Left<LEFT, R>) rg;
+				@SuppressWarnings("unchecked")
+				final Left<LEFT, R> lf = (Left<LEFT, R>) rg;
+				return lf;
 			} else {
-				final Supplier<? extends R> sp2 = rg.rightSupplier().get();
+				@SuppressWarnings("unchecked")
+				final Supplier<? extends R> sp2 = ((Right<?, R>) rg).getRightSupplier();
 				final Supplier<R> spRtn = () -> sp2.get();
-
 				return new Right<LEFT, R>(spRtn);
 			}
 		}
@@ -337,16 +373,67 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 		stream().forEachOrdered(action);
 	}
 
+	/**
+	 * Gets the left value if this is a Left.
+	 *
+	 * @return left value.
+	 */
+	public abstract LEFT getLeftOr(LEFT defaultLeft);
+
+	/**
+	 * Gets the left value if this is a Left.
+	 *
+	 * @return left value.
+	 */
+	public abstract LEFT getLeftOrNoSuchElementException();
+
+	/**
+	 * Gets the right value if this is a Right.
+	 *
+	 * @return right value
+	 */
+	public abstract RIGHT getOr(RIGHT defaultRight);
+
+	/**
+	 * Gets the right value if this is a Right.
+	 *
+	 * @return right value
+	 */
+	public abstract RIGHT getOrNoSuchElementException();
+
+	/**
+	 * @return true if this is a Left, false otherwise.
+	 */
+	public abstract boolean isLeft();
+
 	/** {@inheritDoc} **/
 	@Override
 	public boolean isParallel() {
-		return stream().isParallel();
+		return false;
+	}
+
+	/**
+	 * @return true if this is a Right, false otherwise.
+	 */
+	public boolean isRight() {
+		return !isLeft();
 	}
 
 	/** {@inheritDoc} **/
 	@Override
 	public Iterator<RIGHT> iterator() {
 		return stream().iterator();
+	}
+
+	private <R> Either<LEFT, R> leftOr(Function<? super RIGHT, ? extends R> mapper) {
+		if (isLeft()) {
+			@SuppressWarnings("unchecked")
+			final Left<LEFT, R> lf = (Left<LEFT, R>) this;
+			return lf;
+		} else {
+			final Right<LEFT, R> rg = Right.of(mapper.apply(this.getOrNoSuchElementException()));
+			return rg;
+		}
 	}
 
 	/** {@inheritDoc} **/
@@ -356,17 +443,6 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 			return this;
 		}
 		return stream().limit(maxSize);
-	}
-
-	private <R> Either<LEFT, R> leftOr(Function<? super RIGHT, ? extends R> mapper) {
-		if (isLeft()) {
-			@SuppressWarnings("unchecked")
-			final Left<LEFT, R> lf = (Left<LEFT, R>) this;
-			return lf;
-		} else {
-			final Right<LEFT, R> rg = Right.of(mapper.apply(this.getRight().get()));
-			return rg;
-		}
 	}
 
 	/** {@inheritDoc} **/
@@ -447,6 +523,9 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 		return stream().reduce(identity, accumulator, combiner);
 	}
 
+	// FIXME
+	// abstract Optional<Supplier<RIGHT>> rightSupplier();
+
 	/** {@inheritDoc} **/
 	@Override
 	public Stream<RIGHT> sequential() {
@@ -487,6 +566,14 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	@Override
 	public Spliterator<RIGHT> spliterator() {
 		return stream().spliterator();
+	}
+
+	private Stream<RIGHT> stream() {
+		if (isLeft()) {
+			return Stream.empty();
+		} else {
+			return Stream.of(getOrNoSuchElementException());
+		}
 	}
 
 	/** {@inheritDoc} **/
