@@ -118,6 +118,18 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 
 		/** {@inheritDoc} */
 		@Override
+		public RIGHT orElseGet(Supplier<? extends RIGHT> other) {
+			return other.get();
+		}
+
+		/** {@inheritDoc} */
+		@Override
+		public <X extends Throwable> RIGHT orElseThrow(Supplier<? extends X> exceptionSupplier) throws X {
+			throw exceptionSupplier.get();
+		}
+
+		/** {@inheritDoc} */
+		@Override
 		public String toString() {
 			return "Left[" + left + "]";
 		}
@@ -219,6 +231,18 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 		@Override
 		public boolean isLeft() {
 			return false;
+		}
+
+		/** {@inheritDoc} */
+		@Override
+		public RIGHT orElseGet(Supplier<? extends RIGHT> other) {
+			return getRightSupplier().get();
+		}
+
+		/** {@inheritDoc} */
+		@Override
+		public <X extends Throwable> RIGHT orElseThrow(Supplier<? extends X> exceptionSupplier) throws X {
+			return getRightSupplier().get();
 		}
 
 		/** {@inheritDoc} */
@@ -400,6 +424,52 @@ public abstract class Either<LEFT, RIGHT> implements Stream<RIGHT> {
 	 * @return right value
 	 */
 	public abstract RIGHT getOrNoSuchElementException();
+
+	// ****************TODO
+	/**
+	 * Return the value if {@link Right}, otherwise return {@code other}.
+	 *
+	 * @param other
+	 *            the value to be returned if there is no value present, may be
+	 *            null
+	 * @return the value, if {@link Right}, otherwise {@code other}
+	 */
+	public RIGHT orElse(RIGHT other) {
+		return getOr(other);
+	}
+
+	/**
+	 * Return the value if present, otherwise invoke {@code other} and return
+	 * the result of that invocation.
+	 *
+	 * @param other
+	 *            a {@code Supplier} whose result is returned if no value is
+	 *            present
+	 * @return the value if present otherwise the result of {@code other.get()}
+	 * @throws NullPointerException
+	 *             if value is not present and {@code other} is null
+	 */
+	public abstract RIGHT orElseGet(Supplier<? extends RIGHT> other);
+
+	/**
+	 * Return the contained value, if present, otherwise throw an exception to
+	 * be created by the provided supplier.
+	 *
+	 * @apiNote A method reference to the exception constructor with an empty
+	 *          argument list can be used as the supplier. For example,
+	 *          {@code IllegalStateException::new}
+	 *
+	 * @param <X>
+	 *            Type of the exception to be thrown
+	 * @param exceptionSupplier
+	 *            The supplier which will return the exception to be thrown
+	 * @return the present value
+	 * @throws X
+	 *             if there is no value present
+	 * @throws NullPointerException
+	 *             if no value is present and {@code exceptionSupplier} is null
+	 */
+	public abstract <X extends Throwable> RIGHT orElseThrow(Supplier<? extends X> exceptionSupplier) throws X;
 
 	/**
 	 * @return true if this is a Left, false otherwise.
